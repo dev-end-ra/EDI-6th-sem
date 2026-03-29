@@ -1,8 +1,0 @@
-Task,Robot,Time
-Chassis Base,Robot_1,11:22:01
-Weld Left Frame,Robot_3,11:22:06
-Weld Right Frame,Robot_2,11:22:06
-Front Axle,Robot_1,11:22:10
-Rear Axle,Robot_2,11:22:11
-Engine Install,Robot_3,11:22:17
-Painting,Robot_1,11:22:24

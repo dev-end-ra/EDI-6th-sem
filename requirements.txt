@@ -1,8 +1,8 @@
 pybullet
 stable-baselines3
-shimmy[gymnasium]
-pandas
+gymnasium
 numpy
+pandas
 streamlit
 matplotlib
 seaborn
