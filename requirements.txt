@@ -1,0 +1,9 @@
+pybullet
+stable-baselines3
+shimmy[gymnasium]
+pandas
+numpy
+streamlit
+matplotlib
+seaborn
+opencv-python
