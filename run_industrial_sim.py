@@ -10,13 +10,10 @@ def run_production_cycle():
     # Run simulation for a complete cycle
     for i in range(1200):
         sim.step_simulation()
-        
-        # Periodic CSV save (Member 3)
-        if i % 100 == 0:
-            df = pd.DataFrame(sim.logs)
-            df.to_csv("factory_logs.csv", index=False)
             
-    print("✅ Cycle Complete. Logs saved to factory_logs.csv")
+    # Member 3: Phase 3 Save
+    sim.logger.save_log()
+    print("✅ Cycle Complete. Baseline logs saved.")
     p.disconnect()
 
 if __name__ == "__main__":

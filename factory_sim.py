@@ -4,17 +4,19 @@ import time
 import numpy as np
 
 class FactorySimulation:
-    def __init__(self, render=True):
+    def __init__(self, render=True, physics_speed=240.0):
         if render:
             self.physics_client = p.connect(p.GUI)
         else:
             self.physics_client = p.connect(p.DIRECT)
         
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
-        
-        # Load environment
-        self.plane_id = p.loadURDF("plane.urdf")
+        # Member 3: Phase 3 Data Pipeline
+        from data_pipeline import FactoryLogger
+        self.logger = FactoryLogger(mode="baseline")
+        self.total_dist = 0.0
+        self.idle_time = 0.0
+        self.last_robot_pos = None
         
         # [Day 2] Conveyor Belt Logic
         # We simulate the belt as a visual area and move objects manually on it
@@ -35,7 +37,8 @@ class FactorySimulation:
         self._setup_stations()
         
         # Active Workpiece
-        self.workpiece_id = p.loadURDF("cube_small.urdf", [-2.4, 0, 0.1])
+        self.workpiece_id = p.loadURDF("cube_small.urdf", [-2.6, 0, 0.1])
+        self.start_time = time.time()
         
         # Member 3: Data Logging
         self.logs = []
@@ -46,23 +49,46 @@ class FactorySimulation:
             visual_id = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.3, 0.3, 0.01], rgbaColor=color)
             p.createMultiBody(baseVisualShapeIndex=visual_id, basePosition=pos)
 
-    def step_simulation(self):
-        # Move workpiece on conveyor
+    def step_simulation(self, manual_x=None, manual_joint=None):
         pos, ori = p.getBasePositionAndOrientation(self.workpiece_id)
-        if pos[0] < 2.5:
-            new_pos = [pos[0] + 0.01, pos[1], pos[2]]
+        
+        # [Day 11] Manual Override Logic
+        if manual_x is not None:
+            new_pos = [manual_x, pos[1], pos[2]]
             p.resetBasePositionAndOrientation(self.workpiece_id, new_pos, ori)
+        elif pos[0] < 2.5:
+            # Baseline Automated Move
+            current_station = self._get_current_station(pos[0])
+            move_speed = 0.002 if current_station in ["Assembly", "Painting", "Inspection"] else 0.015
+            new_pos = [pos[0] + move_speed, pos[1], pos[2]]
+            p.resetBasePositionAndOrientation(self.workpiece_id, new_pos, ori)
+            
+        # [Day 11] Manual Robot Joint Override
+        if manual_joint is not None:
+            for j in range(7):
+                # [Day 9] Smooth Motion: Use lower gains for manual control
+                p.setJointMotorControl2(self.robot_id, j, p.POSITION_CONTROL, 
+                                        targetPosition=manual_joint[j],
+                                        positionGain=0.03, velocityGain=1.0)
+        else:
+            # [Day 9] Smooth Wave
+            joint_pos = np.sin(time.time() * 1.5) * 0.4
+            p.setJointMotorControl2(self.robot_id, 3, p.POSITION_CONTROL, 
+                                    targetPosition=joint_pos,
+                                    positionGain=0.05)
         
-        # Simple Robot Wave (Day 3 Preview)
-        joint_pos = np.sin(time.time() * 2) * 0.5
-        p.setJointMotorControl2(self.robot_id, 3, p.POSITION_CONTROL, targetPosition=joint_pos)
+        # Member 3: Distance Tracking
+        robot_pos = p.getLinkState(self.robot_id, 6)[0] # End effector
+        if self.last_robot_pos:
+            self.total_dist += np.linalg.norm(np.array(robot_pos) - np.array(self.last_robot_pos))
+        self.last_robot_pos = robot_pos
+
+        # [Day 3/4/5] Core Logic
+        status = self._get_current_station(pos[0])
+        cycle_time = time.time() - self.start_time
         
-        # Member 3: Log position
-        self.logs.append({
-            "timestamp": time.time(),
-            "workpiece_x": round(pos[0], 3),
-            "status": self._get_current_station(pos[0])
-        })
+        # Log to Phase 3 Pipeline
+        self.logger.log_step(cycle_time, self.total_dist, self.idle_time, status)
         
         p.stepSimulation()
         time.sleep(1/240.)
@@ -71,7 +97,7 @@ class FactorySimulation:
         if -2.3 < x < -1.7: return "Assembly"
         if -0.3 < x < 0.3: return "Painting"
         if 1.7 < x < 2.3: return "Inspection"
-        return "Conveyor"
+        return "Moving on Conveyor"
 
     def get_logs_df(self):
         import pandas as pd
