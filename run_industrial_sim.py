@@ -14,7 +14,12 @@ def run_production_cycle():
     # Member 3: Phase 3 Save
     sim.logger.save_log()
     print("✅ Cycle Complete. Baseline logs saved.")
-    p.disconnect()
+    
+    # [Phase 4] Keep open until manually closed
+    print("👀 Simulation persistent. Close the window to exit.")
+    while p.isConnected():
+        p.stepSimulation()
+        time.sleep(1/240.)
 
 if __name__ == "__main__":
     run_production_cycle()
