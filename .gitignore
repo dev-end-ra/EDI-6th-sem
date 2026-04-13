@@ -1,0 +1,8 @@
+venv/ 
+edi_env/ 
+__pycache__/ 
+*.pyc 
+data/metrics_*.csv 
+models/ppo_factory.zip 
+models/checkpoints/ 
+charts/*.png 

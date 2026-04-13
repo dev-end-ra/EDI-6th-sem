@@ -108,6 +108,9 @@ class FactorySimulation:
             p.changeVisualShape(self.workpiece_id, -1, rgbaColor=[1, 1, 1, 1]) 
             self.is_painted = False
             self.start_time = time.time()
+            # Increment completion count in logger
+            if hasattr(self, 'logger'):
+                self.logger.completions += 1
             
         # Member 3: Distance & Efficiency Tracking (Phase 5: Multi-Arm)
         current_robot_poses = [p.getLinkState(rid, 6)[0] for rid in self.robot_ids]

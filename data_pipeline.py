@@ -5,8 +5,9 @@ import os
 class FactoryLogger:
     def __init__(self, mode="baseline"):
         self.mode = mode # "baseline" or "ai"
-        self.filename = f"{mode}_metrics.csv"
+        self.filename = f"data/{mode}_metrics.csv"
         self.data = []
+        self.completions = 0
         
         # Consistent format for Phase 3
         self.columns = [
@@ -18,7 +19,7 @@ class FactoryLogger:
         entry = {
             "timestamp": time.time(),
             "cycle_time": round(cycle_time, 2), # seconds
-            "throughput": round(3600 / (cycle_time + 1e-6), 1), # units/hr
+            "throughput": self.completions, # count of doors completed
             "robot_distance": round(robot_dist, 3), # meters
             "idle_time": round(idle_time, 2), # seconds
             "reward": round(reward, 2) if reward is not None else "N/A",

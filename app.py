@@ -2,233 +2,221 @@ import streamlit as st
 import pandas as pd
 import time
 import os
-from factory_sim import FactorySimulation
+import subprocess
+from datetime import datetime
 
-st.set_page_config(page_title="Industry 4.0 Factory Monitor", layout="wide", page_icon="🏭")
+# --- 0. PAGE CONFIG ---
+st.set_page_config(
+    page_title="Conveyor Robot AI Optimization — Live Dashboard",
+    layout="wide",
+    page_icon="🏭"
+)
 
-# --- 1. HEADER & EXECUTIVE SUMMARY ---
-st.title("🏭 Industry 4.0: Autonomous Factory Monitor")
+# Custom CSS for a premium look
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .metric-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #29b5e8;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Member 4: Digital Twin Branding (Part 7)
-last_refresh = time.strftime("%H:%M:%S")
-st.markdown(f"""
-<div style="background-color: #0e1117; padding: 15px; border-radius: 10px; border-left: 8px solid #29b5e8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-    <span style="color: #29b5e8; font-weight: bold; font-size: 1.1em;">🦾 PLATFORM: Industrial Digital Twin v1.0</span><br/>
-    <span style="color: #fafafa; font-size: 0.9em;">● LIVE MONITORING ACTIVE | Last System Sync: {last_refresh} | Zero-Defect Handoff Mode</span>
-</div>
-""", unsafe_allow_html=True)
+# --- 1. SIDEBAR ---
+with st.sidebar:
+    st.title("🏭 Industrial AI Dashboard")
+    st.markdown("**Project:** Conveyor Path Optimization")
+    st.markdown("**Status:** Phase 4 Deployment")
+    
+    st.divider()
+    st.subheader("⚙️ Control Panel")
+    auto_refresh = st.toggle("Auto-Refresh (5s)", value=False)
+    if st.button("🔄 Force Refresh"):
+        st.rerun()
+        
+    st.divider()
+    st.subheader("📊 Data Actions")
+    if st.button("Generate/Refresh Charts"):
+        with st.spinner("Processing charts..."):
+            subprocess.run(["python", "charts.py"])
+        st.success("Charts Updated!")
+        st.rerun()
+    
+    st.divider()
+    st.info("💡 **Tip:** Ensure AI training is complete before analyzing comparison charts.")
 
-st.markdown("<br/>", unsafe_allow_html=True) # Spacing polish
-
-with st.expander("📊 EXECUTIVE SUMMARY: HOW AI OPTIMIZES YOUR FACTORY", expanded=False):
-    st.info("""
-    **Key Insight:** Our custom RL agent goes beyond simple automation. By learning the physical constraints of the workspace, 
-    the AI reduces **unnecessary robot movement** and optimizes **task scheduling** to eliminate bottlenecks.
-    """)
-    sum_col1, sum_col2 = st.columns(2)
-    with sum_col1:
-        st.write("✅ **Path Optimization:** Joint trajectories are smoothed for minimum Euclidean distance.")
-    with sum_col2:
-        st.write("✅ **Dead-time Elimination:** Idle states are minimized during conveyor handoffs.")
-
-# --- 2. DATA LOADING & MODE SELECTION ---
+# --- 2. DATA HELPERS ---
 def load_metrics():
-    b = pd.read_csv("baseline_metrics.csv") if os.path.exists("baseline_metrics.csv") else None
-    a = pd.read_csv("ai_metrics.csv") if os.path.exists("ai_metrics.csv") else None
-    return b, a
+    df_b = pd.read_csv("data/metrics_baseline.csv") if os.path.exists("data/metrics_baseline.csv") else None
+    df_a = pd.read_csv("data/metrics_ai.csv") if os.path.exists("data/metrics_ai.csv") else None
+    return df_b, df_a
+
+def get_file_time(path):
+    if os.path.exists(path):
+        mtime = os.path.getmtime(path)
+        return datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    return "N/A"
 
 b_df, a_df = load_metrics()
 
-st.sidebar.title("🎛️ Control Center")
+# --- 3. SECTION 1: LIVE KPI CARDS ---
+st.header("📈 Live Key Performance Indicators")
+col1, col2, col3, col4 = st.columns(4)
 
-# Session state view_mode support
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "Baseline (Manual/Fixed)"
+metrics_to_show = [
+    ("Cycle Time", "cycle_time", "s", False), # lower = better
+    ("Throughput", "throughput", "items", True), # higher = better
+    ("Distance", "distance", "m", False),
+    ("Idle Time", "idle_time", "s", False)
+]
 
-view_mode = st.sidebar.radio("Dashboard View Mode:", ["Baseline (Manual/Fixed)", "AI Optimized (RL)"], key="vm_radio")
-st.session_state.view_mode = view_mode
-
-# Define selected_df
-selected_df = b_df if view_mode == "Baseline (Manual/Fixed)" else a_df
-
-# --- 3. DASHBOARD TABS (Storytelling + Detailed Data) ---
-tab1, tab2, tab3, tab4 = st.tabs(["🎬 Presentation Guide", "📊 Industrial ROI", "🛠️ Station Status", "📝 Raw Log Data"])
-
-with tab1:
-    st.subheader("🏁 Guided Demo: The AI Factory Story")
+for i, (name, col, unit, higher_better) in enumerate(metrics_to_show):
+    # ALL four metrics (cycle_time, throughput, distance, idle_time) are cumulative within an episode
+    # Therefore, taking the max() per episode gives the final value of that episode, then we mean across episodes
+    b_val = b_df.groupby('episode')[col].max().mean() if b_df is not None and 'episode' in b_df.columns else 0
+    a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else None
     
-    # Step 1: Baseline
-    with st.expander("📝 STEP 1: SHOW THE BASELINE (The Problem)", expanded=False):
-        st.markdown("""
-        **Objective:** Demonstrate traditional fixed automation.
-        - **Story:** "Our factory currently uses a fixed sequence. It's rigid, slow, and ignores joint efficiency."
-        - **Highlight:** Select **Baseline** in sidebar. Note high cycle times.
-        """)
-        
-        def reset_to_baseline():
-            st.session_state.vm_radio = "Baseline (Manual/Fixed)"
-            
-        st.button("🏁 Reset to Baseline View", on_click=reset_to_baseline)
-
-    with st.expander("🧠 STEP 2: INTRODUCE THE AI (The Solution)", expanded=False):
-        st.markdown("""
-        **Objective:** Explain Reinforcement Learning (RL).
-        - **Story:** "We've introduced a PPO-based AI. It learns in this Digital Twin before ever touching a real machine."
-        """)
-
-    with st.expander("🚀 STEP 3: SHOW AI RESULTS (The ROI)", expanded=False):
-        st.markdown("""
-        **Objective:** Reveal optimized performance.
-        - **Story:** "AI mode dynamically picks the fastest path. Throughput increases instantly."
-        """)
-
-    with st.expander("📐 STEP 4: FINAL COMPARISON (The Win)", expanded=True):
-        st.markdown("""
-        **Objective:** Secure the marks.
-        - **Story:** "AI reduces movement by 15% and minimizes robotic idle time."
-        """)
+    delta = None
+    # Streamlit inherently colors "normal" mode where positive=green, negative=red.
+    # And "inverse" mode where positive=red, negative=green (which we want for cycle time, distance, idle time).
+    delta_color = "normal" if higher_better else "inverse"
     
-    st.divider()
-    st.markdown(f"""
-    <h3 style='text-align: center; color: #29b5e8;'>🔥 THE FINAL WORD</h3>
-    <p style='text-align: center; font-style: italic; font-size: 1.25em; font-weight: bold;'>
-    "This demonstrates how AI can optimize industrial workflows without physically testing on real machines."
-    </p>
-    """, unsafe_allow_html=True)
+    if a_val is not None and b_val != 0:
+        # User requested formula: delta = ai_value - baseline_value
+        diff = a_val - b_val
+        delta = f"{diff:+.2f} {unit}"
+        
+    with [col1, col2, col3, col4][i]:
+        if a_val is not None:
+            st.metric(f"{name} ({unit})", f"{a_val:.2f}", delta=delta, delta_color=delta_color)
+            st.caption(f"Baseline: {b_val:.2f}")
+        else:
+            st.metric(f"{name} ({unit})", f"{b_val:.2f}")
+            st.caption("AI Training in progress...")
 
-with tab2:
-    st.subheader("🏎️ Industrial ROI: Manual vs AI Autonomous")
-    
-    st.markdown("""
-    ### 📊 Performance Differential (Phase 6)
-    *Comparison of Manual Human-in-the-Loop vs AI-Optimized Multi-Robot Coordination.*
-    """)
-    
-    roi_col1, roi_col2 = st.columns(2)
-    with roi_col1:
-        st.metric("Manual Labor Cost", "$25.00/hr", delta="Standard Rate")
-    with roi_col2:
-        st.metric("AI Automation Cost", "$10.50/hr", delta="-58%", delta_color="inverse")
-    
-    if selected_df is not None:
-        avg_cycle = selected_df['cycle_time'].mean()
-        # Simulated manual penalty (Human latency in clicking buttons)
-        manual_cycle = avg_cycle * 1.45 
-        
-        st.divider()
-        st.info(f"💡 **ROI Insight:** AI coloring is approximately **{(manual_cycle - avg_cycle):.2f}s faster** per unit.")
-        
-        savings_1k = (manual_cycle * 25/3600 - avg_cycle * 10.5/3600) * 1000
-        st.success(f"💰 **Estimated Savings/1000 Units:** ${savings_1k:.2f}")
-        
-        chart_data = pd.DataFrame({
-            'Mode': ['Manual', 'AI Auto'],
-            'Time (sec)': [manual_cycle, avg_cycle],
-            'Cost ($)': [manual_cycle * 25/3600, avg_cycle * 10.5/3600]
-        })
-        st.bar_chart(chart_data, x='Mode', y='Time (sec)')
-        
-        st.divider()
-        st.subheader("📊 Comparative Efficiency Data")
-        comp_data = {
-            "Metric": ["Avg Cycle Time (sec)", "Throughput (U/hr)", "Energy Efficiency"],
-            "Manual (Human)": [f"{manual_cycle:.2f}s", f"{3600/manual_cycle:.1f}", "Variable"],
-            "AI (Autonomous)": [f"{avg_cycle:.2f}s", f"{3600/avg_cycle:.1f}", "High ✅"],
-        }
-        st.table(pd.DataFrame(comp_data))
+st.divider()
 
-with tab3:
-    # [Phase 5] Multi-Robot Monitoring
-    r_col1, r_col2, r_col3 = st.columns(3)
-    with r_col1:
-        st.info("🦾 **Arm 1: Assembly**\n\nStatus: 🟢 ONLINE")
-    with r_col2:
-        st.info("🎨 **Arm 2: Painting**\n\nStatus: 🎨 COLORING ACTIVE")
-    with r_col3:
-        st.info("🔍 **Arm 3: Inspection**\n\nStatus: 🔵 SCANNING")
-    
-    st.divider()
-    # Real-time station tracker from sim
-    if selected_df is not None:
-        current_st = selected_df['status'].iloc[-1]
-        st.success(f"📍 **Active Workpiece Location:** {current_st} | **Total Factory Distance:** {selected_df['robot_distance'].iloc[-1]:.2f}m")
-        
-        # Intensity Gauge for the line
-        intensity = 0 if current_st == "Moving on Conveyor" else 85
-        st.progress(intensity, text=f"Factory Line Load: {intensity}%")
-        if intensity > 0:
-            st.warning("⚠️ **SAFETY NOTICE:** Robots active in work zones. Personnel stay behind light curtains.")
+# --- 4. SECTION 2: SIMULATION STATUS ---
+st.subheader("🛡️ System Readiness & Data Freshness")
+s_col1, s_col2, s_col3 = st.columns(3)
 
-with tab4:
-    st.subheader("📝 Continuous Log Records (Phase 3 Backbone)")
-    if selected_df is not None:
-        st.dataframe(selected_df.tail(20), use_container_width=True)
+with s_col1:
+    model_exists = os.path.exists("models/ppo_factory.zip")
+    if model_exists:
+        st.success("🤖 **AI Model Status:** TRAINING COMPLETE")
     else:
-        st.warning("No logs found. Run a simulation cycle to generate data.")
+        # Check reward log to see if active
+        r_log_exists = os.path.exists("data/reward_log.csv")
+        status_text = "TRAINING IN PROGRESS" if r_log_exists else "MODEL NOT FOUND"
+        st.warning(f"🤖 **AI Model Status:** {status_text}")
 
-# --- 6. SIMULATION CONTROLS ---
-st.sidebar.divider()
-st.sidebar.subheader("🚀 Simulation Actions")
-if st.sidebar.button("▶️ Trigger Baseline Cycle"):
-    with st.spinner("🔄 Simulating Industrial Cycle..."):
-        os.system("python3 run_industrial_sim.py")
-    st.toast("✅ Baseline Cycle Complete!", icon="🏭")
-    st.rerun()
+with s_col2:
+    st.info(f"📊 **Base Data Freshness:**\n\n{get_file_time('data/metrics_baseline.csv')}")
 
-if st.sidebar.button("🧠 Retrain AI Agent"):
-    with st.spinner("🧠 RL Agent Learning Path Optimization..."):
-        os.system("python3 train_factory_rl.py")
-    st.toast("✅ AI Model Updated!", icon="🤖")
-    st.rerun()
+with s_col3:
+    st.info(f"🦾 **AI Data Freshness:**\n\n{get_file_time('data/metrics_ai.csv')}")
 
-# --- 5. SYSTEM STATUS & JOGGING (Member 4) ---
-st.sidebar.divider()
-st.sidebar.subheader("🕹️ Industrial Jogging Console")
+st.divider()
 
-manual_mode = st.sidebar.toggle("Enable Manual Override (LOTO)", help="Lock-Out Tag-Out: Manual control for maintenance.")
+# --- 5. SECTION 3: CHART GALLERY ---
+st.subheader("🎨 Comparative Performance Visualizations")
 
-if manual_mode:
-    st.sidebar.warning("⚠️ MANUAL CONTROL ACTIVE")
+chart_files = [
+    ("cycle_time_comparison.png", "Cycle Time Comparison"),
+    ("kpi_bar_comparison.png", "KPI Bar Metrics"),
+    ("reward_curve.png", "RL Reward Curve"),
+    ("throughput_comparison.png", "Throughput Trends"),
+    ("task_heatmap.png", "Task Heatmap"),
+    ("summary_card.png", "Executive Summary")
+]
+
+gallery_rows = [st.columns(2), st.columns(2), st.columns(2)]
+for i, (fname, title) in enumerate(chart_files):
+    row_idx = i // 2
+    col_idx = i % 2
+    with gallery_rows[row_idx][col_idx]:
+        path = f"charts/{fname}"
+        if os.path.exists(path):
+            st.image(path, caption=title, use_container_width=True)
+        else:
+            st.error(f"❌ {title} Not Found\n\nClick 'Generate Charts' in sidebar.")
+
+st.divider()
+
+# --- 6. SECTION 4: COMPARISON TABLE ---
+st.subheader("📑 Detailed Metric Comparison")
+
+if b_df is not None:
+    comp_metrics = []
+    for name, col, unit, higher_better in metrics_to_show:
+        b_val = b_df.groupby('episode')[col].max().mean() if 'episode' in b_df.columns else 0
+        a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        
+        diff = ((a_val - b_val) / b_val) * 100 if b_val != 0 else 0
+        imp = (-diff if not higher_better else diff)
+        
+        comp_metrics.append({
+            "Metric": name,
+            "Baseline": f"{b_val:.2f} {unit}",
+            "After AI": f"{a_val:.2f} {unit}" if a_df is not None else "---",
+            "Improvement %": f"{imp:+.1f}%" if a_df is not None else "---"
+        })
     
-    # [Phase 5] Robot Selector
-    sel_arm = st.sidebar.radio("Select Active Arm:", ["Arm 1 (Assembly)", "Arm 2 (Painting)", "Arm 3 (Inspection)"], index=0)
-    arm_map = {"Arm 1 (Assembly)": 0, "Arm 2 (Painting)": 1, "Arm 3 (Inspection)": 2}
-    arm_index = arm_map[sel_arm]
-    
-    row1 = st.sidebar.columns(2)
-    with row1[0]:
-        jog_x = st.sidebar.slider("Conveyor (m)", -2.6, 2.5, -2.6)
-    with row1[1]:
-        j1 = st.sidebar.slider("Joint 1", -3.14, 3.14, 0.0)
-    
-    st.sidebar.info("Quick-Jog Joints (Step: 0.1 rad)")
-    j_cols = st.sidebar.columns(3)
-    j2 = j_cols[0].slider("J2", -3.14, 3.14, 0.5)
-    j3 = j_cols[1].slider("J3", -3.14, 3.14, -0.5)
-    j4 = j_cols[2].slider("J4", -3.14, 3.14, 0.0)
-    
-    # [Phase 6] Manual Paint Trigger
-    st.sidebar.divider()
-    trigger_paint = st.sidebar.button("🎨 🖱️ Trigger Spray Paint", help="Manual signal to coloring arm")
-    
-    st.session_state.manual_data = {
-        "x": jog_x,
-        "arm_index": arm_index,
-        "joints": [j1, j2, j3, j4, 0.0, 0.0, 0.0],
-        "trigger_paint": trigger_paint
-    }
+    st.table(pd.DataFrame(comp_metrics))
 else:
-    st.session_state.manual_data = None
-    st.sidebar.success("✅ System in Autonomous Mode")
+    st.warning("No metrics found to compare.")
 
-st.sidebar.divider()
-st.sidebar.subheader("📈 System Health")
-st.sidebar.progress(85, text="AI Path Confidence")
-st.sidebar.progress(92, text="Conveyor Stability")
+st.divider()
 
-if st.button("🔄 Sync Factory Data"):
+# --- 7. SECTION 5: RAW DATA EXPLORER ---
+st.subheader("🔍 Production Raw Log Explorer")
+tab_base, tab_ai = st.tabs(["📊 Baseline Data", "🧠 AI Data"])
+
+with tab_base:
+    if b_df is not None:
+        st.dataframe(b_df.tail(100), use_container_width=True, height=300)
+        st.download_button("Download Baseline CSV", b_df.to_csv(index=False), "baseline_metrics.csv", "text/csv")
+    else:
+        st.info("Baseline data not available.")
+
+with tab_ai:
+    if a_df is not None:
+        st.dataframe(a_df.tail(100), use_container_width=True, height=300)
+        st.download_button("Download AI CSV", a_df.to_csv(index=False), "ai_metrics.csv", "text/csv")
+    else:
+        st.info("AI training data not logging yet.")
+
+st.divider()
+
+# --- 8. SECTION 6: ROBOT DEMO CONTROLS ---
+st.subheader("🕹️ Simulation Demo Controller")
+d_col1, d_col2 = st.columns(2)
+
+with d_col1:
+    demo_mode = st.radio("Simulation Mode:", ["Baseline (Fixed Path)", "AI (RL Optimized)"], horizontal=True)
+    st.caption("⚠️ Ensure training is complete before launching AI mode.")
+
+with d_col2:
+    if st.button("🚀 Launch Simulation GUI", use_container_width=True):
+        st.info("Launching PyBullet Window... (Close it to return to dashboard)")
+        script = "factory_sim.py" if demo_mode == "Baseline (Fixed Path)" else "train_factory_rl.py" 
+        # Note: In a real demo, AI mode might launch a specific evaluation script.
+        subprocess.Popen(["python", script])
+        st.toast("Sim Window Opened!", icon="🚀")
+
+# --- 9. AUTO REFRESH LOGIC ---
+if auto_refresh:
+    time.sleep(5)
     st.rerun()
-
-st.sidebar.title("⚙️ Configuration")
-st.sidebar.info("Digital Twin: Phase 4 Optimized")
-st.sidebar.info("Inverse Kinematics: ENABLED")
