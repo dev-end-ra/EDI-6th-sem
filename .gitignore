@@ -6,3 +6,6 @@ data/metrics_*.csv
 models/ppo_factory.zip 
 models/checkpoints/ 
 charts/*.png 
+__pycache__/ 
+*.pyc 
+ai_metrics.csv 
