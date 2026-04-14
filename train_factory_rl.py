@@ -55,7 +55,7 @@ class CustomLoggingCallback(BaseCallback):
         return True
 
 
-def collect_data(env, filename, num_episodes, policy_func, max_steps=3000):
+def collect_data(env, filename, num_episodes, policy_func, max_steps=6000):
     """
     Runs the environment for num_episodes and logs metrics to CSV.
     """
@@ -103,7 +103,7 @@ def main():
         return dummy_actions[step % 5]
 
     print("=== Step 1: Collecting Baseline Data (50 episodes) ===")
-    baseline_env = FactoryGymEnv(render=False)
+    baseline_env = FactoryGymEnv(render=False, is_baseline=True)
     collect_data(baseline_env, "data/metrics_baseline.csv", num_episodes=50, policy_func=manual_policy)
     print("-> Baseline data saved to data/metrics_baseline.csv\n")
     

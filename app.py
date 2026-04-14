@@ -83,10 +83,22 @@ metrics_to_show = [
 ]
 
 for i, (name, col, unit, higher_better) in enumerate(metrics_to_show):
-    # ALL four metrics (cycle_time, throughput, distance, idle_time) are cumulative within an episode
-    # Therefore, taking the max() per episode gives the final value of that episode, then we mean across episodes
-    b_val = b_df.groupby('episode')[col].max().mean() if b_df is not None and 'episode' in b_df.columns else 0
-    a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else None
+    # Conditionally match the user's specific requested pandas formulas:
+    if col == 'cycle_time':
+        b_val = b_df.groupby('episode')[col].last().mean() if b_df is not None and 'episode' in b_df.columns else 0
+        a_val = a_df.groupby('episode')[col].last().mean() if a_df is not None and 'episode' in a_df.columns else None
+    elif col == 'throughput':
+        b_val = b_df.groupby('episode')[col].max().mean() if b_df is not None and 'episode' in b_df.columns else 0
+        a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else None
+    elif col == 'distance':
+        b_val = b_df.groupby('episode')[col].last().mean() if b_df is not None and 'episode' in b_df.columns else 0
+        a_val = a_df.groupby('episode')[col].last().mean() if a_df is not None and 'episode' in a_df.columns else None
+    elif col == 'idle_time':
+        b_val = b_df.groupby('episode')[col].sum().mean() if b_df is not None and 'episode' in b_df.columns else 0
+        a_val = a_df.groupby('episode')[col].sum().mean() if a_df is not None and 'episode' in a_df.columns else None
+    else:
+        b_val = b_df[col].mean() if b_df is not None else 0
+        a_val = a_df[col].mean() if a_df is not None else None
     
     delta = None
     # Streamlit inherently colors "normal" mode where positive=green, negative=red.
@@ -161,8 +173,21 @@ st.subheader("📑 Detailed Metric Comparison")
 if b_df is not None:
     comp_metrics = []
     for name, col, unit, higher_better in metrics_to_show:
-        b_val = b_df.groupby('episode')[col].max().mean() if 'episode' in b_df.columns else 0
-        a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        if col == 'cycle_time':
+            b_val = b_df.groupby('episode')[col].last().mean() if 'episode' in b_df.columns else 0
+            a_val = a_df.groupby('episode')[col].last().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        elif col == 'throughput':
+            b_val = b_df.groupby('episode')[col].max().mean() if 'episode' in b_df.columns else 0
+            a_val = a_df.groupby('episode')[col].max().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        elif col == 'distance':
+            b_val = b_df.groupby('episode')[col].last().mean() if 'episode' in b_df.columns else 0
+            a_val = a_df.groupby('episode')[col].last().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        elif col == 'idle_time':
+            b_val = b_df.groupby('episode')[col].sum().mean() if 'episode' in b_df.columns else 0
+            a_val = a_df.groupby('episode')[col].sum().mean() if a_df is not None and 'episode' in a_df.columns else 0
+        else:
+            b_val = b_df[col].mean() if 'episode' in b_df.columns else 0
+            a_val = a_df[col].mean() if a_df is not None and 'episode' in a_df.columns else 0
         
         diff = ((a_val - b_val) / b_val) * 100 if b_val != 0 else 0
         imp = (-diff if not higher_better else diff)

@@ -28,11 +28,11 @@ class FactorySimulation:
         # [Phase 5] Multi-Robot Assembly Line Setup
         self.robot_ids = []
         # Robot 1: Assembly (at -2)
-        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [-2, 1.2, 0], useFixedBase=True))
+        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [-2, 0.6, 0], useFixedBase=True))
         # Robot 2: Painting / Coloring (at 0)
-        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [0, 1.2, 0], useFixedBase=True))
+        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [0, 0.6, 0], useFixedBase=True))
         # Robot 3: Inspection (at 2)
-        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [2, 1.2, 0], useFixedBase=True))
+        self.robot_ids.append(p.loadURDF("kuka_iiwa/model.urdf", [2, 0.6, 0], useFixedBase=True))
         
         # [Day 4] Stations
         self.stations = {

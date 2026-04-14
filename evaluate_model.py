@@ -8,7 +8,7 @@ import pybullet as p
 from stable_baselines3 import PPO
 from factory_gym_env import FactoryGymEnv
 
-def evaluate_and_collect(env, model_path, filename, num_episodes=50, max_steps=3000):
+def evaluate_and_collect(env, model_path, filename, num_episodes=50, max_steps=6000):
     # Ensure PyBullet is cleanly connected and previous instances disconnected
     if p.isConnected():
         p.disconnect()
@@ -60,7 +60,7 @@ def main():
         model_path="models/ppo_factory", 
         filename="data/metrics_ai.csv", 
         num_episodes=50, 
-        max_steps=3000
+        max_steps=6000
     )
     
     print("-> AI metrics saved to data/metrics_ai.csv\n")

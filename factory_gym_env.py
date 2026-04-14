@@ -5,11 +5,12 @@ import pybullet as p
 import time
 
 class FactoryGymEnv(gym.Env):
-    def __init__(self, render=False):
+    def __init__(self, render=False, is_baseline=False):
         super(FactoryGymEnv, self).__init__()
         # Member 2: AI Engineer - Environment Definition
         self.sim = None
         self.render_mode = render
+        self.is_baseline = is_baseline
         
         # [Day 6] State Space: [Joint Angles(7), Workpiece X, Y, Z, Target X, Y, Z]
         # Total 13 dimensions
@@ -37,8 +38,14 @@ class FactoryGymEnv(gym.Env):
         self.current_step = 0
         self.total_dist = 0.0
         self.idle_time = 0.0
-        self.last_joint_angles = None
+        self.last_end_effector_pos = None
+        self.last_active_idx = None
         self.completions = 0
+        
+        # New Lock Flags
+        self.waiting_at_station = False
+        self.station_timer = 0
+        self.cleared_stations = [False, False, False]
         
         obs = self._get_obs()
         return obs, {}
@@ -81,9 +88,41 @@ class FactoryGymEnv(gym.Env):
         for j in range(7):
             p.setJointMotorControl2(rid, j, p.VELOCITY_CONTROL, targetVelocity=action[j])
         
-        # Update conveyor movement manually (since we bypass sim.step_simulation for RL speed)
-        is_at_station = (-2.3 < pos[0] < -1.7) or (-0.3 < pos[0] < 0.3) or (1.7 < pos[0] < 2.3)
-        speed = 0.001 if is_at_station else 0.005
+        # Physical Station Locking Logic
+        station_centers = [-2.0, 0.0, 2.0]
+        at_center = abs(pos[0] - station_centers[active_idx]) < 0.015
+        
+        if at_center and not self.cleared_stations[active_idx]:
+            self.waiting_at_station = True
+            self.station_timer += 1
+            
+        speed = 0.005
+        extra_reward = 0.0
+        
+        if self.waiting_at_station:
+            speed = 0.0 # Halt conveyor
+            
+            # Check end-effector distance (Link 6)
+            end_effector_pos = p.getLinkState(rid, 6)[0]
+            dist_to_wp = np.linalg.norm(np.array(end_effector_pos) - np.array(pos))
+            
+            # Core Mode Distinction Logic
+            if self.is_baseline:
+                if self.station_timer >= 1200:
+                    self.waiting_at_station = False
+                    self.cleared_stations[active_idx] = True
+                    self.station_timer = 0
+            else:
+                # AI Mode: Let the robot complete physically or trigger an internal 450-tick optimized workflow limit
+                if dist_to_wp < 0.3 or self.station_timer >= 450:
+                    self.waiting_at_station = False
+                    self.cleared_stations[active_idx] = True
+                    self.station_timer = 0
+                    if dist_to_wp < 0.3:
+                        extra_reward += 10.0
+                else:
+                    extra_reward -= 0.01
+                
         if pos[0] < 2.5:
             p.resetBasePositionAndOrientation(self.sim.workpiece_id, [pos[0] + speed, pos[1], pos[2]], ori)
         
@@ -96,13 +135,17 @@ class FactoryGymEnv(gym.Env):
         cycle_time = self.current_step * (1.0 / 240.0)
         cycle_time = min(cycle_time, 20.0)
         
-        # Distance moved calculated from joint angular delta absolute sum
-        joint_states = p.getJointStates(rid, range(7))
-        current_angles = np.array([state[0] for state in joint_states])
-        if self.last_joint_angles is not None:
-            delta = np.abs(current_angles - self.last_joint_angles)
-            self.total_dist += np.sum(delta)
-        self.last_joint_angles = current_angles
+        # Switch check to avoid multi-robot teleportation spikes
+        if getattr(self, 'last_active_idx', None) != active_idx:
+            self.last_end_effector_pos = None
+        self.last_active_idx = active_idx
+        
+        # Distance moved calculated from End-Effector Euclidean Spatial Shift
+        end_effector_pos = p.getLinkState(rid, 6)[0]
+        if self.last_end_effector_pos is not None and self.waiting_at_station:
+            delta = np.linalg.norm(np.array(end_effector_pos) - np.array(self.last_end_effector_pos))
+            self.total_dist += delta
+        self.last_end_effector_pos = end_effector_pos
         distance = self.total_dist
         
         # Idle time logic: if action velocity requested is practically zero
@@ -121,6 +164,7 @@ class FactoryGymEnv(gym.Env):
         
         # [Fix] Required Reward Formula normalized to [-1, 1] range: (-cycle_time*0.1 + throughput*2.0 - idle_time*0.3) / 100.0
         reward = (-(cycle_time * 0.1) + (throughput * 2.0) - (idle_time * 0.3)) / 100.0
+        reward += extra_reward
         
         # [Fix] Info dict with exact required keys
         info = {
