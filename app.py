@@ -71,12 +71,40 @@ def get_file_time(path):
         return datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
     return "N/A"
 
-def safe_calc(df, col, agg):
-    if df is None or 'episode' not in df.columns: return 0
-    if agg == 'last': return df.groupby('episode')[col].last().mean()
-    if agg == 'max': return df.groupby('episode')[col].max().mean()
-    if agg == 'sum': return df.groupby('episode')[col].sum().mean()
-    return 0
+# ================== 🔥 ULTIMATE SAFE CALC ==================
+def safe_calc(df, col, agg="mean"):
+    if df is None or 'episode' not in df.columns:
+        return 0
+
+    # 🔁 AUTO FALLBACK LOGIC
+    if col not in df.columns:
+        # try reward first
+        if 'reward' in df.columns:
+            col = 'reward'
+        else:
+            # last fallback: use any numeric column
+            numeric_cols = df.select_dtypes(include='number').columns.tolist()
+            if len(numeric_cols) > 0:
+                col = numeric_cols[-1]
+            else:
+                return 0
+
+    try:
+        grouped = df.groupby('episode')[col]
+
+        if agg == 'last':
+            return grouped.last().mean()
+        elif agg == 'max':
+            return grouped.max().mean()
+        elif agg == 'sum':
+            return grouped.sum().mean()
+        else:
+            return grouped.mean().mean()
+
+    except Exception:
+        return 0
+# ==========================================================
+
 
 b_df, a_df = load_metrics()
 
